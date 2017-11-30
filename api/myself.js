@@ -16,16 +16,21 @@ function MyselfClient(jiraClient) {
      *
      * @method getMyself
      * @memberOf MyselfClient#
-     * @param opts Ignored
+     * @param opts
+     * @param opts.expand {array} Expansions
      * @param [callback] Called when the current user is retrieved.
      * @return {Promise} Resolved when the current user is retrieved.
      */
     this.getMyself = function (opts, callback) {
+        var qs = {
+          expand: (opts && opts.expand) || ''
+        };
         var options = {
             uri: this.jiraClient.buildURL('/myself'),
             method: 'GET',
             json: true,
-            followAllRedirects: true
+            followAllRedirects: true,
+            qs: qs || {}
         };
 
         return this.jiraClient.makeRequest(options, callback);
