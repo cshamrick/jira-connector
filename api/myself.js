@@ -25,7 +25,8 @@ function MyselfClient(jiraClient) {
             uri: this.jiraClient.buildURL('/myself'),
             method: 'GET',
             json: true,
-            followAllRedirects: true
+            followAllRedirects: true,
+            expand: opts.expand
         };
 
         return this.jiraClient.makeRequest(options, callback);
