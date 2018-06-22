@@ -5,6 +5,7 @@ var url = require('url');
 
 // Npm packages
 var request = require('request');
+var requestPromise = require('request-promise');
 
 // Custom packages
 var applicationProperties = require('./api/application-properties');
@@ -130,6 +131,9 @@ var worklog = require('./api/worklog');
  * @param {CookieJar} [config.cookie_jar] The CookieJar to use for every requests.
  * @param {Promise} [config.promise] Any function (constructor) compatible with Promise (bluebird, Q,...).
  *      Default - native Promise.
+ * @param {Request} [config.request] Any function (constructor) compatible with Request (request, supertest,...).
+ *      Default - require('request').
+ * @param {function} [config.requestHandler] Any function which will override the actual request and handle it
  */
 
 var JiraClient = module.exports = function (config) {
@@ -145,6 +149,13 @@ var JiraClient = module.exports = function (config) {
     this.authApiVersion = '1';
     this.webhookApiVersion = '1.0';
     this.promise = config.promise || Promise;
+    this.requestLib = config.request || request;
+
+    if (typeof config.requestHandler === 'function') {
+      this.requestHandler = config.requestHandler;
+    } else if (config.requestHandler) {
+      console.warn('Request handler should be a function.')
+    }
 
     if (config.oauth) {
         if (!config.oauth.consumer_key) {
@@ -328,6 +339,8 @@ var JiraClient = module.exports = function (config) {
      * @return {Promise} Resolved with APIs response or rejected with error
      */
     this.makeRequest = function (options, callback, successString) {
+        let requestLib = this.requestLib;
+
         if (this.oauthConfig) {
             options.oauth = this.oauthConfig;
         } else if (this.basic_auth) {
@@ -345,7 +358,7 @@ var JiraClient = module.exports = function (config) {
         }
 
         if (callback) {
-            request(options, function (err, response, body) {
+            requestLib(options, function (err, response, body) {
                 if (err || response.statusCode.toString()[0] != 2) {
                     return callback(err ? err : body, null, response);
                 }
@@ -360,49 +373,24 @@ var JiraClient = module.exports = function (config) {
 
                 return callback(null, successString ? successString : body, response);
             });
-        } else if (this.promise) {
-            return new this.promise(function (resolve, reject) {
-
-                var req = request(options);
-
-                req.on('response', function(response) {
-
-                    // Saving error
-                    var error = response.statusCode.toString()[0] !== '2';
-
-                    // Collecting data
-                    var body = [];
-                    var push = body.push.bind(body);
-                    response.on('data', push);
-
-                    // Data collected
-                    response.on('end', function () {
-
-                        var result = body.join('');
-
-                        // Parsing JSON
-                        if (result[0] === '[' || result[0] === '{') {
-                            try {
-                                result = JSON.parse(result);
-                            } catch(e) {
-                                // nothing to do
-                            }
-                        }
-
-                        if (error) {
-                            response.body = result;
-                            reject(JSON.stringify(response));
-                            return;
-                        }
-
-                        resolve(result);
+        } else {
+            if (this.requestHandler) {
+                return this.requestHandler.call(this, options);
+            } else {
+                return requestPromise(Object.assign({}, options, {
+                  resolveWithFullResponse: true
+                }))
+                    .then(function (response) {
+                        if (response.statusCode < 400) return response.body;
+                        throw new Error(response);
+                    }, function (error) {
+                        if (error.statusCode < 400 && error.response) return error.response.body;
+                        throw error;
+                    })
+                    .then(function (body) {
+                        return (body !== undefined && body) || '';
                     });
-
-                });
-
-                req.on('error', reject);
-
-            });
+            }
         }
 
     };
