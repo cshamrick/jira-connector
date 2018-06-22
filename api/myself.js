@@ -27,7 +27,7 @@ function MyselfClient(jiraClient) {
             json: true,
             followAllRedirects: true,
             qs: {
-                expand: opts.expand
+                expand: opts && opts.expand || ''
             }
         };
 
