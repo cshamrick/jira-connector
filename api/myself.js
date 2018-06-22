@@ -26,7 +26,9 @@ function MyselfClient(jiraClient) {
             method: 'GET',
             json: true,
             followAllRedirects: true,
-            expand: opts.expand
+            qs: {
+                expand: opts.expand
+            }
         };
 
         return this.jiraClient.makeRequest(options, callback);
